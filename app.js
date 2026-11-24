@@ -12,38 +12,70 @@ const brandSeed = [
   { id: "vivakard", name: "Vivakard", initials: "VV", tier: 1, owner: "David & Emma", color: "#b8742e" },
 ];
 
-const staticAssetSeeds = ["cardace", "vivakard"].flatMap((brandId) => [
+const staticAssetSeeds = [
+  ...["cardace", "vivakard"].flatMap((brandId) => [
+    {
+      id: `${brandId}-december-targeted-source`,
+      brandId,
+      section: "december",
+      title: "December targeted campaigns - source document",
+      assetKind: "Campaign document",
+      platform: "All channels",
+      status: "Published",
+      name: "december-targeted-campaigns.png",
+      type: "image/png",
+      size: 269255,
+      url: "assets/documents/december-targeted-campaigns.png",
+      dateLabel: "24 Nov 2026",
+      isStatic: true,
+    },
+    {
+      id: `${brandId}-december-christmas-source`,
+      brandId,
+      section: "december",
+      title: "December Christmas campaigns - source document",
+      assetKind: "Campaign document",
+      platform: "All channels",
+      status: "Published",
+      name: "december-christmas-campaigns.png",
+      type: "image/png",
+      size: 297418,
+      url: "assets/documents/december-christmas-campaigns.png",
+      dateLabel: "24 Nov 2026",
+      isStatic: true,
+    },
+  ]),
   {
-    id: `${brandId}-december-targeted-source`,
-    brandId,
+    id: "cardace-december-christmas-giveaway-banner",
+    brandId: "cardace",
     section: "december",
-    title: "December targeted campaigns - source document",
-    assetKind: "Campaign document",
+    title: "Christmas weekly giveaway banner",
+    assetKind: "Creative design",
     platform: "All channels",
     status: "Published",
-    name: "december-targeted-campaigns.png",
-    type: "image/png",
-    size: 269255,
-    url: "assets/documents/december-targeted-campaigns.png",
+    name: "cardace-christmas-giveaway.jpg",
+    type: "image/jpeg",
+    size: 142151,
+    url: "assets/creatives/cardace/cardace-christmas-giveaway.jpg",
     dateLabel: "24 Nov 2026",
     isStatic: true,
   },
   {
-    id: `${brandId}-december-christmas-source`,
-    brandId,
+    id: "cardace-december-new-user-cash-banner",
+    brandId: "cardace",
     section: "december",
-    title: "December Christmas campaigns - source document",
-    assetKind: "Campaign document",
+    title: "New-user ₦3,000 cash reward banner",
+    assetKind: "Creative design",
     platform: "All channels",
     status: "Published",
-    name: "december-christmas-campaigns.png",
+    name: "cardace-new-user-cash-reward.png",
     type: "image/png",
-    size: 297418,
-    url: "assets/documents/december-christmas-campaigns.png",
+    size: 244377,
+    url: "assets/creatives/cardace/cardace-new-user-cash-reward.png",
     dateLabel: "24 Nov 2026",
     isStatic: true,
   },
-]);
+];
 
 const blankCampaign = (section) => ({
   title: section === "current" ? "Current in-app promotion" : "December campaign brief",
@@ -131,6 +163,7 @@ function cardAceCampaigns() {
     },
     december: {
       ...blankCampaign("december"),
+      seedVersion: 2,
       title: "CardAce December campaign",
       objective: "Increase GMV by encouraging new users to start trading, inactive users to return and existing users to trade consistently.",
       audience: "High-value customers, inactive users, new users and active traders",
@@ -185,6 +218,12 @@ function cardAceCampaigns() {
                 { label: "Reward", value: "₦3,000 cash" },
                 { label: "Channels", value: "Email, in-app banners and pop-ups" },
               ],
+              media: {
+                assetId: "cardace-december-new-user-cash-banner",
+                src: "assets/creatives/cardace/cardace-new-user-cash-reward.png",
+                alt: "CardAce new-user ₦3,000 first-trade cash reward banner",
+                caption: "New-user campaign creative",
+              },
             },
           ],
         },
@@ -198,6 +237,12 @@ function cardAceCampaigns() {
             { dates: "15–21 Dec", reward: "₦5,000" },
             { dates: "22–28 Dec", reward: "₦5,000" },
           ],
+          media: {
+            assetId: "cardace-december-christmas-giveaway-banner",
+            src: "assets/creatives/cardace/cardace-christmas-giveaway.jpg",
+            alt: "CardAce Christmas weekly giveaway banner",
+            caption: "Christmas giveaway campaign creative",
+          },
         },
         {
           type: "channelList",
@@ -358,7 +403,12 @@ function mergeCampaign(defaultCampaign, savedCampaign) {
     !savedCampaign.offer &&
     !savedCampaign.audience;
   if (untouched && defaultCampaign.lastUpdated !== "Not updated") return defaultCampaign;
-  return { ...defaultCampaign, ...savedCampaign };
+  const merged = { ...defaultCampaign, ...savedCampaign };
+  if ((defaultCampaign.seedVersion || 0) > (savedCampaign.seedVersion || 0)) {
+    merged.modules = defaultCampaign.modules;
+    merged.seedVersion = defaultCampaign.seedVersion;
+  }
+  return merged;
 }
 
 function createInitialState() {
@@ -819,13 +869,14 @@ function renderCampaignModules(modules) {
           </div>
           <div class="brief-card-grid">
             ${module.items.map((item) => `
-              <article class="brief-card">
+              <article class="brief-card ${item.media ? "brief-card-with-media" : ""}">
                 <span class="brief-card-label">${escapeHtml(item.label)}</span>
                 <h3>${escapeHtml(item.title)}</h3>
                 <p>${escapeHtml(item.summary)}</p>
                 <dl>
                   ${item.facts.map((fact) => `<div><dt>${escapeHtml(fact.label)}</dt><dd>${escapeHtml(fact.value)}</dd></div>`).join("")}
                 </dl>
+                ${item.media ? renderInlineCampaignMedia(item.media, "brief-card-media") : ""}
               </article>
             `).join("")}
           </div>
@@ -840,8 +891,11 @@ function renderCampaignModules(modules) {
             <h2>${escapeHtml(module.title)}</h2>
             <p>${escapeHtml(module.intro)}</p>
           </div>
-          <div class="week-grid">
-            ${module.weeks.map((week, index) => `<div class="week-item"><span>Week ${index + 1}</span><strong>${escapeHtml(week.dates)}</strong><b>${escapeHtml(week.reward)}</b></div>`).join("")}
+          <div class="timeline-gallery-layout ${module.media ? "has-media" : ""}">
+            <div class="week-grid">
+              ${module.weeks.map((week, index) => `<div class="week-item"><span>Week ${index + 1}</span><strong>${escapeHtml(week.dates)}</strong><b>${escapeHtml(week.reward)}</b></div>`).join("")}
+            </div>
+            ${module.media ? renderInlineCampaignMedia(module.media, "timeline-gallery-media") : ""}
           </div>
         </section>
       `;
@@ -869,6 +923,15 @@ function renderCampaignModules(modules) {
 
     return "";
   }).join("");
+}
+
+function renderInlineCampaignMedia(media, className) {
+  return `
+    <button class="inline-campaign-media ${className}" data-preview-asset="${escapeHtml(media.assetId)}" aria-label="Preview ${escapeHtml(media.caption)}">
+      <img src="${escapeHtml(media.src)}" alt="${escapeHtml(media.alt)}" />
+      <span><i data-lucide="expand" aria-hidden="true"></i>${escapeHtml(media.caption)}</span>
+    </button>
+  `;
 }
 
 function renderCreativeLibrary(assets, brandId = null) {
