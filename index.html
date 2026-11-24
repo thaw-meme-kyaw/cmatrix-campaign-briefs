@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f6f2" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <title>C-Matrix Campaign Briefs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true">CM</div>
+          <div>
+            <strong>C-Matrix</strong>
+            <span>Campaign briefs</span>
+          </div>
+        </div>
+
+        <nav class="primary-nav" id="primary-nav">
+          <button class="nav-item active" data-route="overview">
+            <i data-lucide="layout-dashboard" aria-hidden="true"></i>
+            <span>Overview</span>
+          </button>
+          <div class="nav-label">Brands</div>
+          <div id="brand-nav"></div>
+          <div class="nav-label">Resources</div>
+          <button class="nav-item" data-route="process">
+            <i data-lucide="workflow" aria-hidden="true"></i>
+            <span>Content process</span>
+          </button>
+          <button class="nav-item" data-route="assets">
+            <i data-lucide="folder-open" aria-hidden="true"></i>
+            <span>Campaign files</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="team-avatars" aria-label="Project owners">
+            <span>ST</span><span>TT</span><span>DV</span><span>EM</span>
+          </div>
+          <p>Internal team workspace</p>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <div class="mobile-brand">
+            <div class="brand-mark" aria-hidden="true">CM</div>
+            <strong>C-Matrix</strong>
+          </div>
+          <div class="breadcrumb" id="breadcrumb">Campaign overview</div>
+          <div class="topbar-actions">
+            <div class="mode-switch" aria-label="Workspace mode">
+              <button class="mode-button active" data-mode="team">Team view</button>
+              <button class="mode-button" data-mode="admin">Admin</button>
+            </div>
+            <button class="button primary admin-only hidden" id="top-add-button">
+              <i data-lucide="plus" aria-hidden="true"></i>
+              <span>Add content</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="prototype-notice" id="prototype-notice">
+          <i data-lucide="hard-drive" aria-hidden="true"></i>
+          <span><strong>Draft framework:</strong> edits and uploads are stored only in this browser.</span>
+          <button class="icon-button" id="dismiss-notice" aria-label="Dismiss notice" title="Dismiss">
+            <i data-lucide="x" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <div class="page" id="app-content" tabindex="-1"></div>
+      </main>
+    </div>
+
+    <dialog class="modal" id="brief-modal">
+      <form method="dialog" id="brief-form">
+        <div class="modal-header">
+          <div>
+            <span class="eyebrow">Campaign information</span>
+            <h2 id="brief-modal-title">Edit brief</h2>
+          </div>
+          <button type="button" class="icon-button" data-close-modal="brief-modal" aria-label="Close" title="Close">
+            <i data-lucide="x" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div class="modal-body form-grid">
+          <label>
+            Brand
+            <select name="brandId" id="brief-brand"></select>
+          </label>
+          <label>
+            Campaign section
+            <select name="section">
+              <option value="current">Current in-app promotion</option>
+              <option value="december">December campaign</option>
+            </select>
+          </label>
+          <label class="span-2">
+            Campaign title
+            <input name="title" required placeholder="Enter the campaign title" />
+          </label>
+          <label>
+            Start date
+            <input name="startDate" type="date" />
+          </label>
+          <label>
+            End date
+            <input name="endDate" type="date" />
+          </label>
+          <label>
+            Status
+            <select name="status">
+              <option>Draft</option>
+              <option>Under Review</option>
+              <option>Approved</option>
+              <option>Published</option>
+              <option>Archived</option>
+            </select>
+          </label>
+          <label>
+            Target audience
+            <input name="audience" placeholder="e.g. Nigerian gift card users" />
+          </label>
+          <label class="span-2">
+            Campaign objective
+            <textarea name="objective" rows="3" placeholder="What should this campaign achieve?"></textarea>
+          </label>
+          <label class="span-2">
+            Offer or promotion mechanics
+            <textarea name="offer" rows="3" placeholder="Reward, eligibility, steps and key conditions"></textarea>
+          </label>
+          <label class="span-2">
+            Key messages
+            <textarea name="keyMessages" rows="3" placeholder="Add one message per line"></textarea>
+          </label>
+          <label class="span-2">
+            CTA
+            <input name="cta" placeholder="Required call to action" />
+          </label>
+          <label class="span-2">
+            Content requirements
+            <textarea name="requirements" rows="3" placeholder="Required visuals, demonstration, talking points or formats"></textarea>
+          </label>
+          <label class="span-2">
+            Restrictions and terms
+            <textarea name="restrictions" rows="3" placeholder="Claims to avoid, eligibility limits and other terms"></textarea>
+          </label>
+          <label class="span-2">
+            Internal notes
+            <textarea name="notes" rows="2" placeholder="Visible only in Admin mode"></textarea>
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="button secondary" data-close-modal="brief-modal">Cancel</button>
+          <button type="submit" class="button primary">
+            <i data-lucide="save" aria-hidden="true"></i>
+            Save brief
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal compact-modal" id="creative-modal">
+      <form method="dialog" id="creative-form">
+        <div class="modal-header">
+          <div>
+            <span class="eyebrow">Campaign library</span>
+            <h2>Upload campaign file</h2>
+          </div>
+          <button type="button" class="icon-button" data-close-modal="creative-modal" aria-label="Close" title="Close">
+            <i data-lucide="x" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div class="modal-body form-grid">
+          <label>
+            Brand
+            <select name="brandId" id="creative-brand"></select>
+          </label>
+          <label>
+            Campaign section
+            <select name="section">
+              <option value="current">Current promotion</option>
+              <option value="december">December campaign</option>
+              <option value="shared">Shared brand asset</option>
+            </select>
+          </label>
+          <label class="span-2">
+            File title
+            <input name="title" required placeholder="e.g. December TikTok storyboard" />
+          </label>
+          <label>
+            File category
+            <select name="assetKind">
+              <option>Campaign document</option>
+              <option>Creative design</option>
+              <option>Script or storyboard</option>
+              <option>Brand guideline</option>
+            </select>
+          </label>
+          <label>
+            Platform
+            <select name="platform">
+              <option>Instagram</option>
+              <option>TikTok</option>
+              <option>Instagram / TikTok</option>
+              <option>All channels</option>
+            </select>
+          </label>
+          <label class="span-2">
+            Status
+            <select name="status">
+              <option>Draft</option>
+              <option>Under Review</option>
+              <option>Approved</option>
+              <option>Published</option>
+            </select>
+          </label>
+          <label class="span-2 file-field" id="file-drop-zone">
+            <input name="files" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx" required />
+            <i data-lucide="upload-cloud" aria-hidden="true"></i>
+            <strong>Choose files to upload</strong>
+            <span>Images, videos, PDFs or presentation files</span>
+          </label>
+          <div class="span-2 file-list" id="selected-files"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="button secondary" data-close-modal="creative-modal">Cancel</button>
+          <button type="submit" class="button primary">
+            <i data-lucide="upload" aria-hidden="true"></i>
+            Upload files
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal preview-modal" id="preview-modal">
+      <div class="modal-header">
+        <div>
+          <span class="eyebrow">Creative preview</span>
+          <h2 id="preview-title">Preview</h2>
+        </div>
+        <button type="button" class="icon-button" data-close-modal="preview-modal" aria-label="Close" title="Close">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="preview-stage" id="preview-stage"></div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
