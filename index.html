@@ -12,9 +12,29 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20261125-1" />
+    <link rel="stylesheet" href="styles.css?v=20261125-3" />
   </head>
-  <body>
+  <body class="auth-locked">
+    <section class="auth-gate" id="auth-gate" aria-labelledby="auth-title">
+      <div class="auth-panel">
+        <div class="auth-brand">
+          <div class="brand-mark" aria-hidden="true">CM</div>
+          <div><strong>C-Matrix</strong><span>Campaign briefs</span></div>
+        </div>
+        <div class="auth-icon" aria-hidden="true"><i data-lucide="lock"></i></div>
+        <span class="eyebrow">Internal team access</span>
+        <h1 id="auth-title">Enter the shared password</h1>
+        <p>Use the team password to open campaign briefs and approved files.</p>
+        <form class="auth-form" id="auth-form">
+          <label for="access-password">Password</label>
+          <input id="access-password" name="password" type="password" inputmode="numeric" autocomplete="current-password" required />
+          <p class="auth-error" id="auth-error" role="alert" hidden>Incorrect password. Please try again.</p>
+          <button class="button primary" type="submit"><i data-lucide="arrow-right" aria-hidden="true"></i>Open workspace</button>
+        </form>
+        <div class="auth-footnote"><i data-lucide="shield-check" aria-hidden="true"></i><span>For authorised C-Matrix team members only.</span></div>
+      </div>
+    </section>
+
     <div class="app-shell">
       <aside class="sidebar" aria-label="Primary navigation">
         <div class="brand-lockup">
@@ -63,6 +83,10 @@
               <button class="mode-button active" data-mode="team">Team view</button>
               <button class="mode-button" data-mode="admin">Admin</button>
             </div>
+            <button class="button secondary auth-logout" id="auth-logout">
+              <i data-lucide="log-out" aria-hidden="true"></i>
+              <span>Log out</span>
+            </button>
             <button class="button primary admin-only hidden" id="top-add-button">
               <i data-lucide="plus" aria-hidden="true"></i>
               <span>Add content</span>
@@ -201,6 +225,7 @@
           <label>
             File category
             <select name="assetKind">
+              <option>Influencer brief</option>
               <option>Campaign document</option>
               <option>Creative design</option>
               <option>Script or storyboard</option>
@@ -263,10 +288,11 @@
     <script>
       window.CMATRIX_CONFIG = window.CMATRIX_CONFIG || {
         readOnly: true,
+        accessPasswordHash: "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
         supabaseUrl: "https://stwulgvqhibhkpsovigs.supabase.co",
         supabasePublishableKey: "sb_publishable_FGJ1A7STgFAz3zhvNUobFg_DJ46Srfx",
       };
     </script>
-    <script src="app.js?v=20261125-3"></script>
+    <script src="app.js?v=20261125-5"></script>
   </body>
 </html>

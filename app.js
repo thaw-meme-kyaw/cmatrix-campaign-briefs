@@ -3,6 +3,8 @@ const DB_NAME = "cmatrix-creative-library";
 const DB_VERSION = 1;
 const ASSET_STORE = "assets";
 const READ_ONLY = Boolean(window.CMATRIX_CONFIG?.readOnly);
+const ACCESS_PASSWORD_HASH = window.CMATRIX_CONFIG?.accessPasswordHash || "";
+const ACCESS_SESSION_KEY = "cmatrix-team-access-v1";
 const SUPABASE_URL = window.CMATRIX_CONFIG?.supabaseUrl?.replace(/\/$/, "") || "";
 const SUPABASE_KEY = window.CMATRIX_CONFIG?.supabasePublishableKey || "";
 const SUPABASE_ENABLED = Boolean(SUPABASE_URL && SUPABASE_KEY);
@@ -570,6 +572,7 @@ let assetCache = [];
 let remoteAssets = [];
 let toastTimer;
 let previewUrl;
+let appInitialised = false;
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -728,6 +731,11 @@ function valueOrPending(value, label = "Information") {
   return value?.trim() || `${label} has not been added yet.`;
 }
 
+function isBriefFileAsset(asset) {
+  const searchable = `${asset.assetKind || ""} ${asset.title || ""} ${asset.name || ""}`;
+  return asset.type === "application/pdf" && /brief/i.test(searchable);
+}
+
 function renderIcons() {
   if (window.lucide) window.lucide.createIcons();
 }
@@ -738,6 +746,61 @@ function showToast(message) {
   toast.classList.add("visible");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove("visible"), 2600);
+}
+
+async function hashAccessPassword(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function setAccessLocked(locked) {
+  document.body.classList.toggle("auth-locked", locked);
+  $("#auth-gate").hidden = !locked;
+  if (locked) requestAnimationFrame(() => $("#access-password").focus());
+}
+
+async function openProtectedWorkspace() {
+  sessionStorage.setItem(ACCESS_SESSION_KEY, ACCESS_PASSWORD_HASH || "unlocked");
+  setAccessLocked(false);
+  if (!appInitialised) {
+    appInitialised = true;
+    await initialise();
+  }
+}
+
+function initialiseAccessGate() {
+  const form = $("#auth-form");
+  const passwordInput = $("#access-password");
+  const error = $("#auth-error");
+  const savedAccess = sessionStorage.getItem(ACCESS_SESSION_KEY);
+
+  $("#auth-logout").addEventListener("click", () => {
+    sessionStorage.removeItem(ACCESS_SESSION_KEY);
+    window.location.reload();
+  });
+
+  passwordInput.addEventListener("input", () => {
+    error.hidden = true;
+    passwordInput.removeAttribute("aria-invalid");
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submittedHash = await hashAccessPassword(passwordInput.value);
+    if (submittedHash !== ACCESS_PASSWORD_HASH) {
+      error.hidden = false;
+      passwordInput.setAttribute("aria-invalid", "true");
+      passwordInput.select();
+      return;
+    }
+    passwordInput.value = "";
+    await openProtectedWorkspace();
+  });
+
+  renderIcons();
+  if (!ACCESS_PASSWORD_HASH || savedAccess === ACCESS_PASSWORD_HASH) openProtectedWorkspace();
+  else setAccessLocked(true);
 }
 
 function openDatabase() {
@@ -972,7 +1035,14 @@ function renderActivity() {
 function renderBrandPage(brand) {
   const campaign = brand[state.activeTab === "december" ? "december" : "current"];
   const activeAssets = assetCache.filter((asset) => asset.brandId === brand.id);
+  const briefAssets = activeAssets.filter(
+    (asset) => isBriefFileAsset(asset) && (state.mode === "admin" || ["Approved", "Published"].includes(asset.status)),
+  );
+  const creativeAssets = activeAssets.filter((asset) => !isBriefFileAsset(asset));
   const visibleCampaign = state.mode === "admin" || campaign.status === "Published" || campaign.shareVisible;
+  const isBriefTab = state.activeTab === "briefs";
+  const headerStatus = isBriefTab ? `${briefAssets.length} PDF${briefAssets.length === 1 ? "" : "s"}` : campaign.status;
+  const headerUpdated = isBriefTab ? briefAssets[0]?.dateLabel || "No PDF uploaded" : campaign.lastUpdated;
 
   return `
     <div class="brand-hero">
@@ -981,10 +1051,10 @@ function renderBrandPage(brand) {
         <div>
           <div class="brand-meta">
             <span class="tier-badge tier-${brand.tier}">Tier ${brand.tier}</span>
-            <span class="status-badge ${statusClass(campaign.status)}">${campaign.status}</span>
+            <span class="status-badge ${isBriefTab ? "status-brief-files" : statusClass(campaign.status)}">${headerStatus}</span>
           </div>
           <h1>${brand.name}</h1>
-          <p>Owner: ${brand.owner} · Last updated: ${campaign.lastUpdated}</p>
+          <p>Owner: ${brand.owner} · Last updated: ${headerUpdated}</p>
         </div>
       </div>
       <div class="brand-actions">
@@ -997,12 +1067,15 @@ function renderBrandPage(brand) {
     <div class="tabs" role="tablist">
       <button class="tab-button ${state.activeTab === "current" ? "active" : ""}" data-tab="current">Current promotion</button>
       <button class="tab-button ${state.activeTab === "december" ? "active" : ""}" data-tab="december">December campaign</button>
-      <button class="tab-button ${state.activeTab === "creatives" ? "active" : ""}" data-tab="creatives">Creatives <span class="muted">(${activeAssets.length})</span></button>
+      <button class="tab-button ${state.activeTab === "briefs" ? "active" : ""}" data-tab="briefs">Brief files <span class="muted">(${briefAssets.length})</span></button>
+      <button class="tab-button ${state.activeTab === "creatives" ? "active" : ""}" data-tab="creatives">Creatives <span class="muted">(${creativeAssets.length})</span></button>
     </div>
 
     ${
-      state.activeTab === "creatives"
-        ? renderCreativeLibrary(activeAssets, brand.id)
+      state.activeTab === "briefs"
+        ? renderBriefLibrary(briefAssets, brand)
+        : state.activeTab === "creatives"
+          ? renderCreativeLibrary(creativeAssets, brand.id)
         : visibleCampaign
           ? renderCampaign(campaign, brand)
           : renderUnpublishedCampaign(brand)
@@ -1099,6 +1172,7 @@ function renderCampaignFiles(brandId, section) {
     (asset) =>
       asset.brandId === brandId &&
       asset.section === section &&
+      !isBriefFileAsset(asset) &&
       (state.mode === "admin" || asset.status === "Published"),
   );
   return `
@@ -1118,6 +1192,95 @@ function renderCampaignFiles(brandId, section) {
           : `<div class="campaign-files-empty"><i data-lucide="folder-open" aria-hidden="true"></i><span>${state.mode === "admin" ? "No files yet. Upload the campaign source document, brief or approved creative." : "No approved campaign files have been added yet."}</span></div>`
       }
     </section>
+  `;
+}
+
+function renderBriefLibrary(assets, brand) {
+  const visibleAssets = assets.filter((asset) => state.mode === "admin" || ["Approved", "Published"].includes(asset.status));
+  const [latest, ...otherFiles] = visibleAssets;
+
+  if (!latest) {
+    return `
+      <div class="brief-files-page brief-files-empty-state">
+        <div class="brief-files-heading">
+          <div>
+            <span class="eyebrow">Team reference</span>
+            <h2>Brief files</h2>
+            <p>Approved influencer briefs will be available here for browser preview and download.</p>
+          </div>
+          <button class="button primary admin-only ${state.mode === "admin" ? "" : "hidden"}" data-upload-creative="${brand.id}" data-upload-section="shared">
+            <i data-lucide="upload" aria-hidden="true"></i>Upload PDF
+          </button>
+        </div>
+        <div class="brief-files-empty">
+          <i data-lucide="file-text" aria-hidden="true"></i>
+          <h3>No approved brief PDF yet</h3>
+          <p>The PDF will appear here after it is uploaded and published for the team.</p>
+          <span><i data-lucide="eye" aria-hidden="true"></i>Preview in browser</span>
+          <span><i data-lucide="download" aria-hidden="true"></i>Download original PDF</span>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="brief-files-page">
+      <div class="brief-files-heading">
+        <div>
+          <span class="eyebrow">Team reference</span>
+          <h2>Brief files</h2>
+          <p>Open the approved brief in the browser or download the original PDF.</p>
+        </div>
+        <div class="brief-files-heading-actions">
+          <span>${visibleAssets.length} PDF file${visibleAssets.length === 1 ? "" : "s"}</span>
+          <button class="button primary admin-only ${state.mode === "admin" ? "" : "hidden"}" data-upload-creative="${brand.id}" data-upload-section="shared">
+            <i data-lucide="upload" aria-hidden="true"></i>Upload PDF
+          </button>
+        </div>
+      </div>
+      ${renderFeaturedBriefFile(latest)}
+      ${otherFiles.length ? `<div class="brief-file-list">${otherFiles.map(renderBriefFileRow).join("")}</div>` : ""}
+      <div class="brief-access-note">
+        <i data-lucide="info" aria-hidden="true"></i>
+        <p><strong>Team access</strong><span>Team members can preview and download published PDFs. Uploading and replacing files remain restricted to the backend owner.</span></p>
+      </div>
+    </div>
+  `;
+}
+
+function renderFeaturedBriefFile(asset) {
+  return `
+    <article class="featured-brief-file">
+      <div class="brief-pdf-mark"><i data-lucide="file-text" aria-hidden="true"></i><span>PDF</span></div>
+      <div class="brief-file-copy">
+        <span class="brief-latest-label">Latest brief</span>
+        <h3>${escapeHtml(asset.title)}</h3>
+        <p>${escapeHtml(asset.assetKind || "Influencer brief")} · ${formatBytes(asset.size)} · Added ${escapeHtml(asset.dateLabel || "recently")}</p>
+      </div>
+      <div class="brief-file-actions">
+        <button class="button primary" data-preview-asset="${asset.id}"><i data-lucide="eye" aria-hidden="true"></i>Preview</button>
+        <button class="button secondary" data-download-asset="${asset.id}"><i data-lucide="download" aria-hidden="true"></i>Download</button>
+        ${asset.isStatic ? "" : `<button class="icon-button admin-only ${state.mode === "admin" ? "" : "hidden"}" data-delete-asset="${asset.id}" aria-label="Delete ${escapeHtml(asset.title)}" title="Delete"><i data-lucide="trash-2" aria-hidden="true"></i></button>`}
+      </div>
+    </article>
+  `;
+}
+
+function renderBriefFileRow(asset) {
+  return `
+    <article class="brief-file-row">
+      <span class="brief-file-row-icon"><i data-lucide="file-text" aria-hidden="true"></i></span>
+      <div class="brief-file-copy">
+        <h3>${escapeHtml(asset.title)}</h3>
+        <p>${escapeHtml(asset.assetKind || "Influencer brief")} · ${formatBytes(asset.size)} · Added ${escapeHtml(asset.dateLabel || "recently")}</p>
+      </div>
+      <span class="status-badge ${statusClass(asset.status)}">${asset.status}</span>
+      <div class="campaign-file-actions">
+        <button class="icon-button" data-preview-asset="${asset.id}" aria-label="Preview ${escapeHtml(asset.title)}" title="Preview"><i data-lucide="eye" aria-hidden="true"></i></button>
+        <button class="icon-button" data-download-asset="${asset.id}" aria-label="Download ${escapeHtml(asset.title)}" title="Download"><i data-lucide="download" aria-hidden="true"></i></button>
+        ${asset.isStatic ? "" : `<button class="icon-button admin-only ${state.mode === "admin" ? "" : "hidden"}" data-delete-asset="${asset.id}" aria-label="Delete ${escapeHtml(asset.title)}" title="Delete"><i data-lucide="trash-2" aria-hidden="true"></i></button>`}
+      </div>
+    </article>
   `;
 }
 
@@ -1285,7 +1448,7 @@ function renderAllAssets() {
       <div>
         <span class="eyebrow">Shared library</span>
         <h1>Campaign files</h1>
-        <p>Browse campaign documents, designs, scripts and supporting materials across all five brands.</p>
+        <p>Browse campaign documents, briefs, designs, scripts and supporting materials across all four brands.</p>
       </div>
     </div>
     ${renderCreativeLibrary(assetCache)}
@@ -1340,7 +1503,7 @@ function render() {
   if (state.route === "brand") {
     const brand = state.brands.find((item) => item.id === state.activeBrandId) || state.brands[0];
     html = renderBrandPage(brand);
-    breadcrumb = `${brand.name} / ${state.activeTab === "current" ? "Current promotion" : state.activeTab === "december" ? "December campaign" : "Creatives"}`;
+    breadcrumb = `${brand.name} / ${state.activeTab === "current" ? "Current promotion" : state.activeTab === "december" ? "December campaign" : state.activeTab === "briefs" ? "Brief files" : "Creatives"}`;
   } else if (state.route === "process") {
     html = renderProcess();
     breadcrumb = "Content process";
@@ -1651,4 +1814,4 @@ async function initialise() {
   }
 }
 
-initialise();
+initialiseAccessGate();
