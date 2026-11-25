@@ -3,6 +3,9 @@ const DB_NAME = "cmatrix-creative-library";
 const DB_VERSION = 1;
 const ASSET_STORE = "assets";
 const READ_ONLY = Boolean(window.CMATRIX_CONFIG?.readOnly);
+const SUPABASE_URL = window.CMATRIX_CONFIG?.supabaseUrl?.replace(/\/$/, "") || "";
+const SUPABASE_KEY = window.CMATRIX_CONFIG?.supabasePublishableKey || "";
+const SUPABASE_ENABLED = Boolean(SUPABASE_URL && SUPABASE_KEY);
 
 const brandSeed = [
   { id: "cardgoal", name: "Cardgoal", initials: "CG", tier: 1, owner: "David", color: "#c94b38" },
@@ -10,6 +13,115 @@ const brandSeed = [
   { id: "jiragift", name: "JiraGift", initials: "JG", tier: 2, owner: "Emma", color: "#4b8060" },
   { id: "carding", name: "Carding", initials: "CD", tier: 3, owner: "Emma", color: "#765b8f" },
   { id: "vivakard", name: "Vivakard", initials: "VV", tier: 1, owner: "David & Emma", color: "#b8742e" },
+];
+
+const overviewPlanSeeds = [
+  {
+    brandId: "cardace",
+    campaign: "December Christmas giveaway",
+    launchDate: "2026-12-01",
+    preparationDays: 5,
+    currentStage: "Brief preparation",
+    payment: "To confirm",
+    finalApprovalDate: "2026-11-30",
+    tasks: [
+      {
+        date: "2026-11-26",
+        title: "Share final brand and promotion brief",
+        description: "Provide the approved offer, key messages, CTA and content requirements.",
+        owner: "David",
+        icon: "file-text",
+      },
+      {
+        date: "2026-11-27",
+        title: "Confirm the KOL video concept",
+        description: "Agree on the video format, creative direction and key talking points.",
+        owner: "David",
+        icon: "message-square",
+      },
+      {
+        date: "2026-11-28",
+        title: "Confirm payment terms",
+        description: "Record the agreed upfront percentage and complete the required payment step.",
+        owner: "David / Finance",
+        icon: "landmark",
+      },
+      {
+        date: "2026-11-29",
+        title: "Receive and review the first draft",
+        description: "Check the draft against the approved concept, brief and CTA.",
+        owner: "David",
+        icon: "video",
+      },
+      {
+        date: "2026-11-30",
+        title: "Give final written approval",
+        description: "Consolidate feedback, complete agreed revisions and approve the final video.",
+        owner: "Thaw Thaw / David",
+        icon: "badge-check",
+      },
+      {
+        date: "2026-12-01",
+        title: "Publish and record the live link",
+        description: "Publish only the approved video, then save the link and publication date.",
+        owner: "David",
+        icon: "send",
+      },
+    ],
+  },
+  {
+    brandId: "vivakard",
+    campaign: "12 Days of Trading",
+    launchDate: "2026-12-01",
+    preparationDays: 5,
+    currentStage: "Brief preparation",
+    payment: "To confirm",
+    finalApprovalDate: "2026-11-30",
+    tasks: [
+      {
+        date: "2026-11-26",
+        title: "Share final brand and promotion brief",
+        description: "Confirm the correct campaign phase, offer, CTA and content requirements.",
+        owner: "David & Emma",
+        icon: "file-text",
+      },
+      {
+        date: "2026-11-27",
+        title: "Confirm the KOL video concept",
+        description: "Agree on the video format, creative direction and key talking points.",
+        owner: "David & Emma",
+        icon: "message-square",
+      },
+      {
+        date: "2026-11-28",
+        title: "Confirm payment terms",
+        description: "Record the agreed upfront percentage and complete the required payment step.",
+        owner: "Team / Finance",
+        icon: "landmark",
+      },
+      {
+        date: "2026-11-29",
+        title: "Receive and review the first draft",
+        description: "Check the draft against the approved concept, brief and CTA.",
+        owner: "David & Emma",
+        icon: "video",
+      },
+      {
+        date: "2026-11-30",
+        title: "Give final written approval",
+        description: "Consolidate feedback, complete agreed revisions and approve the final video.",
+        owner: "Thaw Thaw / Team",
+        icon: "badge-check",
+      },
+      {
+        date: "2026-12-01",
+        title: "Publish and record the live link",
+        description: "Publish only the approved video, then save the link and publication date.",
+        owner: "David & Emma",
+        icon: "send",
+      },
+    ],
+  },
 ];
 
 const staticAssetSeeds = [
@@ -456,6 +568,7 @@ function loadState() {
 
 let state = loadState();
 let assetCache = [];
+let remoteAssets = [];
 let toastTimer;
 let previewUrl;
 
@@ -466,12 +579,119 @@ function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+async function fetchSupabaseRows(table, query) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+    },
+  });
+  if (!response.ok) throw new Error(`${table} request failed with ${response.status}`);
+  return response.json();
+}
+
+function campaignFromRow(row, fallback) {
+  const remoteModules = Array.isArray(row.modules) && row.modules.length ? row.modules : fallback.modules;
+  return {
+    ...fallback,
+    title: row.title || fallback.title,
+    objective: row.objective || "",
+    audience: row.audience || "",
+    offer: row.offer || "",
+    keyMessages: row.key_messages || "",
+    cta: row.cta || "",
+    requirements: row.content_requirements || "",
+    restrictions: row.restrictions || "",
+    startDate: row.start_date || "",
+    endDate: row.end_date || "",
+    status: row.status || "Draft",
+    shareVisible: Boolean(row.share_with_team),
+    lastUpdated: row.updated_at ? formatRemoteDate(row.updated_at) : fallback.lastUpdated,
+    modules: remoteModules,
+  };
+}
+
+function formatRemoteDate(value) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Dubai",
+  }).format(new Date(value));
+}
+
+function storagePublicUrl(path) {
+  if (!path) return "";
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${SUPABASE_URL}/storage/v1/object/public/campaign-files/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+async function loadRemoteContent() {
+  if (!SUPABASE_ENABLED) return;
+  const [brands, campaigns, files] = await Promise.all([
+    fetchSupabaseRows("brands", "select=id,name,initials,tier,owner_name,color,sort_order&active=eq.true&order=sort_order.asc"),
+    fetchSupabaseRows("campaigns", "select=brand_id,section,title,objective,audience,offer,key_messages,cta,content_requirements,restrictions,start_date,end_date,status,share_with_team,modules,updated_at"),
+    fetchSupabaseRows("campaign_files", "select=id,brand_id,section,title,asset_kind,platform,status,file_name,mime_type,size_bytes,storage_path,display_date,created_at&order=created_at.desc"),
+  ]);
+
+  if (brands.length) {
+    state.brands = state.brands.map((brand) => {
+      const remote = brands.find((item) => item.id === brand.id);
+      return remote
+        ? {
+            ...brand,
+            name: remote.name,
+            initials: remote.initials,
+            tier: remote.tier,
+            owner: remote.owner_name,
+            color: remote.color,
+          }
+        : brand;
+    });
+  }
+
+  campaigns.forEach((row) => {
+    const brand = state.brands.find((item) => item.id === row.brand_id);
+    if (!brand || !["current", "december"].includes(row.section)) return;
+    brand[row.section] = campaignFromRow(row, brand[row.section]);
+  });
+
+  remoteAssets = files.map((file) => {
+    const url = storagePublicUrl(file.storage_path);
+    return {
+      id: file.id,
+      brandId: file.brand_id,
+      section: file.section,
+      title: file.title,
+      assetKind: file.asset_kind,
+      platform: file.platform,
+      status: file.status,
+      name: file.file_name,
+      type: file.mime_type || "application/octet-stream",
+      size: file.size_bytes || 0,
+      url,
+      objectUrl: url,
+      dateLabel: file.display_date || formatRemoteDate(file.created_at),
+      isStatic: true,
+      isRemote: true,
+    };
+  });
+}
+
 function formatDate(dateString) {
   if (!dateString) return "To be confirmed";
   return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: "Asia/Dubai",
+  }).format(new Date(`${dateString}T12:00:00+04:00`));
+}
+
+function formatShortDate(dateString) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
     timeZone: "Asia/Dubai",
   }).format(new Date(`${dateString}T12:00:00+04:00`));
 }
@@ -591,14 +811,24 @@ function renderOverview() {
   const campaigns = state.brands.flatMap((brand) => [brand.current, brand.december]);
   const published = campaigns.filter((campaign) => campaign.status === "Published").length;
   const underReview = campaigns.filter((campaign) => campaign.status === "Under Review").length;
-  const assetCount = assetCache.length;
+  const overviewPlans = overviewPlanSeeds
+    .map((plan) => ({ ...plan, brand: state.brands.find((brand) => brand.id === plan.brandId) }))
+    .filter((plan) => plan.brand);
+  const groupedTasks = overviewPlans
+    .flatMap((plan) => plan.tasks.map((task) => ({ ...task, plan })))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .reduce((groups, task) => {
+      if (!groups[task.date]) groups[task.date] = [];
+      groups[task.date].push(task);
+      return groups;
+    }, {});
 
   return `
     <div class="page-header">
       <div>
-        <span class="eyebrow">November–December campaign</span>
-        <h1>Campaign overview</h1>
-        <p>One working brief for five gift card brands. Review campaign readiness, ownership and creative materials from this workspace.</p>
+        <span class="eyebrow">Internal planning</span>
+        <h1>Upcoming actions</h1>
+        <p>Backward-planned preparation tasks for each influencer campaign, from the final brief through publication.</p>
       </div>
       <button class="button secondary" onclick="window.print()">
         <i data-lucide="printer" aria-hidden="true"></i>
@@ -606,11 +836,85 @@ function renderOverview() {
       </button>
     </div>
 
-    <div class="summary-strip">
-      <div class="summary-stat"><strong>5</strong><span>Active brands</span></div>
-      <div class="summary-stat"><strong>${published}/10</strong><span>Briefs published</span></div>
-      <div class="summary-stat"><strong>${underReview}</strong><span>Under review</span></div>
-      <div class="summary-stat"><strong>${assetCount}</strong><span>Creative files</span></div>
+    <div class="overview-notice">
+      <i data-lucide="calendar-clock" aria-hidden="true"></i>
+      <p><strong>Estimated internal timeline</strong><span>Dates are planning references and should be updated when each brand confirms its campaign, launch date and KOL agreement.</span></p>
+    </div>
+
+    <div class="readiness-strip" aria-label="Campaign readiness summary">
+      <div><span>Campaigns scheduled</span><strong>${overviewPlans.length}</strong><small>CardAce and Vivakard</small></div>
+      <div><span>Next internal deadline</span><strong>26 Nov</strong><small>Final brand and promotion briefs</small></div>
+      <div><span>Payment terms pending</span><strong>${overviewPlans.filter((plan) => plan.payment === "To confirm").length}</strong><small>Confirm before content production</small></div>
+    </div>
+
+    <div class="overview-planning-layout">
+      <section class="action-queue" aria-labelledby="action-queue-title">
+        <div class="planning-section-header">
+          <div>
+            <h2 id="action-queue-title">Internal awareness timeline</h2>
+            <p>Actions are grouped by their estimated completion date.</p>
+          </div>
+          <span class="planning-label">26 Nov–1 Dec</span>
+        </div>
+        ${Object.entries(groupedTasks)
+          .map(
+            ([date, tasks]) => `
+              <div class="action-date-row">
+                <strong>${formatShortDate(date)}</strong>
+                <span>${tasks.length} action${tasks.length === 1 ? "" : "s"}</span>
+              </div>
+              ${tasks
+                .map(
+                  (task) => `
+                    <article class="action-item">
+                      <span class="action-icon"><i data-lucide="${task.icon}" aria-hidden="true"></i></span>
+                      <div class="action-copy">
+                        <span class="action-brand" style="--brand-color:${task.plan.brand.color}">${task.plan.brand.initials} · ${escapeHtml(task.plan.campaign)}</span>
+                        <h3>${escapeHtml(task.title)}</h3>
+                        <p>${escapeHtml(task.description)}</p>
+                      </div>
+                      <div class="action-owner"><span>Owner</span><strong>${escapeHtml(task.owner)}</strong></div>
+                    </article>
+                  `,
+                )
+                .join("")}
+            `,
+          )
+          .join("")}
+      </section>
+
+      <aside class="launch-plan-panel" aria-labelledby="launch-plan-title">
+        <div class="planning-section-header">
+          <div>
+            <h2 id="launch-plan-title">Campaign launch plan</h2>
+            <p>Estimated schedules</p>
+          </div>
+        </div>
+        ${overviewPlans
+          .map(
+            (plan) => `
+              <div class="launch-plan">
+                <div class="launch-plan-heading">
+                  <span class="brand-initial" style="--brand-color:${plan.brand.color}">${plan.brand.initials}</span>
+                  <div><strong>${escapeHtml(plan.campaign)}</strong><span>${formatShortDate(plan.launchDate)} · ${plan.preparationDays} preparation days</span></div>
+                  <span class="planning-status">Estimated</span>
+                </div>
+                <div class="launch-progress" aria-label="Preparation not started"><span style="width:16%"></span></div>
+                <dl>
+                  <div><dt>Current stage</dt><dd>${escapeHtml(plan.currentStage)}</dd></div>
+                  <div><dt>Payment</dt><dd>${escapeHtml(plan.payment)}</dd></div>
+                  <div><dt>Final approval</dt><dd>${formatShortDate(plan.finalApprovalDate)}</dd></div>
+                  <div><dt>Owner</dt><dd>${escapeHtml(plan.brand.owner)}</dd></div>
+                </dl>
+              </div>
+            `,
+          )
+          .join("")}
+        <div class="launch-plan-placeholder">
+          <i data-lucide="plus-circle" aria-hidden="true"></i>
+          <p><strong>Three campaigns to add</strong><span>Cardgoal, JiraGift and Carding will appear after the promotion and launch date are confirmed.</span></p>
+        </div>
+      </aside>
     </div>
 
     <div class="section-heading">
@@ -649,14 +953,6 @@ function renderOverview() {
         </tbody>
       </table>
     </div>
-
-    <div class="section-heading">
-      <div>
-        <h2>Recent activity</h2>
-        <p>Changes made in this browser</p>
-      </div>
-    </div>
-    ${renderActivity()}
   `;
 }
 
@@ -1291,6 +1587,7 @@ async function refreshAssets() {
   const storedAssets = await getAssets();
   assetCache = [
     ...staticAssetSeeds.map((asset) => ({ ...asset, objectUrl: asset.url })),
+    ...remoteAssets,
     ...storedAssets.map((asset) => ({ ...asset, objectUrl: URL.createObjectURL(asset.blob) })),
   ];
   render();
@@ -1341,6 +1638,13 @@ async function deleteAsset(id) {
 }
 
 async function initialise() {
+  if (SUPABASE_ENABLED) {
+    try {
+      await loadRemoteContent();
+    } catch (error) {
+      console.warn("Supabase content is unavailable; using the bundled campaign data.", error);
+    }
+  }
   renderBrandNavigation();
   populateBrandSelectors();
   bindStaticEvents();
