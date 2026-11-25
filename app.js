@@ -10,9 +10,8 @@ const SUPABASE_ENABLED = Boolean(SUPABASE_URL && SUPABASE_KEY);
 const brandSeed = [
   { id: "cardgoal", name: "Cardgoal", initials: "CG", tier: 1, owner: "David", color: "#c94b38" },
   { id: "cardace", name: "CardAce", initials: "CA", tier: 2, owner: "David", color: "#3d718c" },
-  { id: "jiragift", name: "JiraGift", initials: "JG", tier: 2, owner: "Emma", color: "#4b8060" },
-  { id: "carding", name: "Carding", initials: "CD", tier: 3, owner: "Emma", color: "#765b8f" },
-  { id: "vivakard", name: "Vivakard", initials: "VV", tier: 1, owner: "David & Emma", color: "#b8742e" },
+  { id: "jiragift", name: "JaraGift", initials: "JG", tier: 2, owner: "Emma", color: "#4b8060" },
+  { id: "vivakard", name: "Vivakard", initials: "VV", tier: 1, owner: "Emma", color: "#b8742e" },
 ];
 
 const overviewPlanSeeds = [
@@ -82,42 +81,42 @@ const overviewPlanSeeds = [
         date: "2026-11-26",
         title: "Share final brand and promotion brief",
         description: "Confirm the correct campaign phase, offer, CTA and content requirements.",
-        owner: "David & Emma",
+        owner: "Emma",
         icon: "file-text",
       },
       {
         date: "2026-11-27",
         title: "Confirm the KOL video concept",
         description: "Agree on the video format, creative direction and key talking points.",
-        owner: "David & Emma",
+        owner: "Emma",
         icon: "message-square",
       },
       {
         date: "2026-11-28",
         title: "Confirm payment terms",
         description: "Record the agreed upfront percentage and complete the required payment step.",
-        owner: "Team / Finance",
+        owner: "Emma / Finance",
         icon: "landmark",
       },
       {
         date: "2026-11-29",
         title: "Receive and review the first draft",
         description: "Check the draft against the approved concept, brief and CTA.",
-        owner: "David & Emma",
+        owner: "Emma",
         icon: "video",
       },
       {
         date: "2026-11-30",
         title: "Give final written approval",
         description: "Consolidate feedback, complete agreed revisions and approve the final video.",
-        owner: "Thaw Thaw / Team",
+        owner: "Thaw Thaw / Emma",
         icon: "badge-check",
       },
       {
         date: "2026-12-01",
         title: "Publish and record the live link",
         description: "Publish only the approved video, then save the link and publication date.",
-        owner: "David & Emma",
+        owner: "Emma",
         icon: "send",
       },
     ],
@@ -830,10 +829,6 @@ function renderOverview() {
         <h1>Upcoming actions</h1>
         <p>Backward-planned preparation tasks for each influencer campaign, from the final brief through publication.</p>
       </div>
-      <button class="button secondary" onclick="window.print()">
-        <i data-lucide="printer" aria-hidden="true"></i>
-        Print overview
-      </button>
     </div>
 
     <div class="overview-notice">
@@ -912,7 +907,7 @@ function renderOverview() {
           .join("")}
         <div class="launch-plan-placeholder">
           <i data-lucide="plus-circle" aria-hidden="true"></i>
-          <p><strong>Three campaigns to add</strong><span>Cardgoal, JiraGift and Carding will appear after the promotion and launch date are confirmed.</span></p>
+          <p><strong>Two campaigns to add</strong><span>Cardgoal and JaraGift will appear after the promotion and launch date are confirmed.</span></p>
         </div>
       </aside>
     </div>
@@ -993,7 +988,6 @@ function renderBrandPage(brand) {
         </div>
       </div>
       <div class="brand-actions">
-        <button class="button secondary" onclick="window.print()"><i data-lucide="printer" aria-hidden="true"></i>Print</button>
         <button class="button primary admin-only ${state.mode === "admin" ? "" : "hidden"}" data-edit-brief="${brand.id}">
           <i data-lucide="pencil" aria-hidden="true"></i>Edit brief
         </button>
