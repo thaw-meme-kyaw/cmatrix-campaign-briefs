@@ -550,8 +550,8 @@ function loadState() {
         const saved = stored.brands.find((brand) => brand.id === seed.id) || {};
         const defaults = campaignDefaultsFor(seed.id);
         return {
-          ...seed,
           ...saved,
+          ...seed,
           current: mergeCampaign(defaults.current, saved.current),
           december: mergeCampaign(defaults.december, saved.december),
         };
