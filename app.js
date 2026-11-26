@@ -1049,12 +1049,12 @@ function renderBrandTimeline(plan, brand) {
     <section class="schedule-lane" aria-label="${escapeHtml(brand.name)} timeline">
       <header class="schedule-heading">
         <div><h2>${escapeHtml(brand.name)}</h2><p>${escapeHtml(plan.campaign)} · ${escapeHtml(brand.owner)}</p></div>
-        <div class="schedule-launch">Estimated launch <strong>${formatDate(plan.launchDate)}</strong></div>
+        <div class="schedule-launch">${plan.period ? "Campaign period" : "Estimated launch"} <strong>${plan.period ? escapeHtml(plan.period) : formatDate(plan.launchDate)}</strong></div>
       </header>
       <ol class="schedule-track">
         ${tasks.map(task => `
           <li class="schedule-stop">
-            <time datetime="${task.date}">${formatShortDate(task.date)}</time>
+            <time datetime="${escapeHtml(task.date)}">${formatShortDate(task.date)}</time>
             <span class="schedule-category" data-category="${escapeHtml(task.category)}">${escapeHtml(task.category)}</span>
             <details><summary>${escapeHtml(task.title)}</summary><p>${escapeHtml(task.description)}</p></details>
             <span class="schedule-owner">${escapeHtml(task.owner)}</span>
@@ -1068,6 +1068,13 @@ function renderOverview() {
   const scheduled = (internal ? overviewPlanSeeds : [])
     .map(plan => ({ plan, brand: state.brands.find(brand => brand.id === plan.brandId) }))
     .filter(entry => entry.brand);
+  if (internal) {
+    const brand = state.brands.find(item => item.id === "cardgoal");
+    const timelines = brand?.december?.modules?.filter(item => item.type === "overviewTimeline") || [];
+    for (const plan of timelines) {
+      if (Array.isArray(plan.tasks)) scheduled.push({ plan, brand });
+    }
+  }
   const pending = internal ? state.brands.filter(brand => !scheduled.some(entry => entry.brand.id === brand.id)) : [];
   return `
     <div class="page-header"><div>
