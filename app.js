@@ -32,42 +32,42 @@ const overviewPlanSeeds = [
         title: "Share final brand and promotion brief",
         description: "Provide the approved offer, key messages, CTA and content requirements.",
         owner: "David",
-        icon: "file-text",
+        category: "Planning",
       },
       {
         date: "2026-11-27",
         title: "Confirm the KOL video concept",
         description: "Agree on the video format, creative direction and key talking points.",
         owner: "David",
-        icon: "message-square",
+        category: "Agreement",
       },
       {
         date: "2026-11-28",
-        title: "Confirm payment terms",
-        description: "Record the agreed upfront percentage and complete the required payment step.",
+        title: "Confirm terms and request payment",
+        description: "Record the agreed amount and upfront percentage, then submit the request to Finance.",
         owner: "David / Finance",
-        icon: "landmark",
+        category: "Payment request",
       },
       {
         date: "2026-11-29",
         title: "Receive and review the first draft",
         description: "Check the draft against the approved concept, brief and CTA.",
         owner: "David",
-        icon: "video",
+        category: "Content review",
       },
       {
         date: "2026-11-30",
         title: "Give final written approval",
         description: "Consolidate feedback, complete agreed revisions and approve the final video.",
         owner: "Thaw Thaw / David",
-        icon: "badge-check",
+        category: "Approval",
       },
       {
         date: "2026-12-01",
         title: "Publish and record the live link",
         description: "Publish only the approved video, then save the link and publication date.",
         owner: "David",
-        icon: "send",
+        category: "Publication",
       },
     ],
   },
@@ -85,42 +85,42 @@ const overviewPlanSeeds = [
         title: "Share final brand and promotion brief",
         description: "Confirm the correct campaign phase, offer, CTA and content requirements.",
         owner: "Emma",
-        icon: "file-text",
+        category: "Planning",
       },
       {
         date: "2026-11-27",
         title: "Confirm the KOL video concept",
         description: "Agree on the video format, creative direction and key talking points.",
         owner: "Emma",
-        icon: "message-square",
+        category: "Agreement",
       },
       {
         date: "2026-11-28",
-        title: "Confirm payment terms",
-        description: "Record the agreed upfront percentage and complete the required payment step.",
+        title: "Confirm terms and request payment",
+        description: "Record the agreed amount and upfront percentage, then submit the request to Finance.",
         owner: "Emma / Finance",
-        icon: "landmark",
+        category: "Payment request",
       },
       {
         date: "2026-11-29",
         title: "Receive and review the first draft",
         description: "Check the draft against the approved concept, brief and CTA.",
         owner: "Emma",
-        icon: "video",
+        category: "Content review",
       },
       {
         date: "2026-11-30",
         title: "Give final written approval",
         description: "Consolidate feedback, complete agreed revisions and approve the final video.",
         owner: "Thaw Thaw / Emma",
-        icon: "badge-check",
+        category: "Approval",
       },
       {
         date: "2026-12-01",
         title: "Publish and record the live link",
         description: "Publish only the approved video, then save the link and publication date.",
         owner: "Emma",
-        icon: "send",
+        category: "Publication",
       },
     ],
   },
@@ -1043,111 +1043,39 @@ function renderBrandNavigation() {
     .join("");
 }
 
-function renderOverview() {
-  const campaigns = state.brands.flatMap((brand) => [brand.current, brand.december]);
-  const published = campaigns.filter((campaign) => campaign.status === "Published").length;
-  const underReview = campaigns.filter((campaign) => campaign.status === "Under Review").length;
-  const overviewPlans = (canOpenAdminMode() ? overviewPlanSeeds : [])
-    .map((plan) => ({ ...plan, brand: state.brands.find((brand) => brand.id === plan.brandId) }))
-    .filter((plan) => plan.brand);
-  const groupedTasks = overviewPlans
-    .flatMap((plan) => plan.tasks.map((task) => ({ ...task, plan })))
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .reduce((groups, task) => {
-      if (!groups[task.date]) groups[task.date] = [];
-      groups[task.date].push(task);
-      return groups;
-    }, {});
-
+function renderBrandTimeline(plan, brand) {
+  const tasks = [...plan.tasks].sort((a, b) => a.date.localeCompare(b.date));
   return `
-    <div class="page-header">
-      <div>
-        <span class="eyebrow">Internal planning</span>
-        <h1>Upcoming actions</h1>
-        <p>Backward-planned preparation tasks for each influencer campaign, from the final brief through publication.</p>
-      </div>
-    </div>
+    <section class="schedule-lane" aria-label="${escapeHtml(brand.name)} timeline">
+      <header class="schedule-heading">
+        <div><h2>${escapeHtml(brand.name)}</h2><p>${escapeHtml(plan.campaign)} · ${escapeHtml(brand.owner)}</p></div>
+        <div class="schedule-launch">Estimated launch <strong>${formatDate(plan.launchDate)}</strong></div>
+      </header>
+      <ol class="schedule-track">
+        ${tasks.map(task => `
+          <li class="schedule-stop">
+            <time datetime="${task.date}">${formatShortDate(task.date)}</time>
+            <span class="schedule-category" data-category="${escapeHtml(task.category)}">${escapeHtml(task.category)}</span>
+            <details><summary>${escapeHtml(task.title)}</summary><p>${escapeHtml(task.description)}</p></details>
+            <span class="schedule-owner">${escapeHtml(task.owner)}</span>
+          </li>`).join("")}
+      </ol>
+    </section>`;
+}
 
-    <div class="overview-notice">
-      <i data-lucide="calendar-clock" aria-hidden="true"></i>
-      <p><strong>Estimated internal timeline</strong><span>Dates are planning references and should be updated when each brand confirms its campaign, launch date and KOL agreement.</span></p>
-    </div>
-
-    <div class="readiness-strip" aria-label="Campaign readiness summary">
-      <div><span>Campaigns scheduled</span><strong>${overviewPlans.length}</strong><small>CardAce and Vivakard</small></div>
-      <div><span>Next internal deadline</span><strong>26 Nov</strong><small>Final brand and promotion briefs</small></div>
-      <div><span>Payment terms pending</span><strong>${overviewPlans.filter((plan) => plan.payment === "To confirm").length}</strong><small>Confirm before content production</small></div>
-    </div>
-
-    <div class="overview-planning-layout">
-      <section class="action-queue" aria-labelledby="action-queue-title">
-        <div class="planning-section-header">
-          <div>
-            <h2 id="action-queue-title">Internal awareness timeline</h2>
-            <p>Actions are grouped by their estimated completion date.</p>
-          </div>
-          <span class="planning-label">26 Nov–1 Dec</span>
-        </div>
-        ${Object.entries(groupedTasks)
-          .map(
-            ([date, tasks]) => `
-              <div class="action-date-row">
-                <strong>${formatShortDate(date)}</strong>
-                <span>${tasks.length} action${tasks.length === 1 ? "" : "s"}</span>
-              </div>
-              ${tasks
-                .map(
-                  (task) => `
-                    <article class="action-item">
-                      <span class="action-icon"><i data-lucide="${task.icon}" aria-hidden="true"></i></span>
-                      <div class="action-copy">
-                        <span class="action-brand" style="--brand-color:${task.plan.brand.color}">${task.plan.brand.initials} · ${escapeHtml(task.plan.campaign)}</span>
-                        <h3>${escapeHtml(task.title)}</h3>
-                        <p>${escapeHtml(task.description)}</p>
-                      </div>
-                      <div class="action-owner"><span>Owner</span><strong>${escapeHtml(task.owner)}</strong></div>
-                    </article>
-                  `,
-                )
-                .join("")}
-            `,
-          )
-          .join("")}
-      </section>
-
-      <aside class="launch-plan-panel" aria-labelledby="launch-plan-title">
-        <div class="planning-section-header">
-          <div>
-            <h2 id="launch-plan-title">Campaign launch plan</h2>
-            <p>Estimated schedules</p>
-          </div>
-        </div>
-        ${overviewPlans
-          .map(
-            (plan) => `
-              <div class="launch-plan">
-                <div class="launch-plan-heading">
-                  <span class="brand-initial" style="--brand-color:${plan.brand.color}">${plan.brand.initials}</span>
-                  <div><strong>${escapeHtml(plan.campaign)}</strong><span>${formatShortDate(plan.launchDate)} · ${plan.preparationDays} preparation days</span></div>
-                  <span class="planning-status">Estimated</span>
-                </div>
-                <div class="launch-progress" aria-label="Preparation not started"><span style="width:16%"></span></div>
-                <dl>
-                  <div><dt>Current stage</dt><dd>${escapeHtml(plan.currentStage)}</dd></div>
-                  <div><dt>Payment</dt><dd>${escapeHtml(plan.payment)}</dd></div>
-                  <div><dt>Final approval</dt><dd>${formatShortDate(plan.finalApprovalDate)}</dd></div>
-                  <div><dt>Owner</dt><dd>${escapeHtml(plan.brand.owner)}</dd></div>
-                </dl>
-              </div>
-            `,
-          )
-          .join("")}
-        <div class="launch-plan-placeholder">
-          <i data-lucide="plus-circle" aria-hidden="true"></i>
-          <p><strong>Two campaigns to add</strong><span>Cardgoal and JaraGift will appear after the promotion and launch date are confirmed.</span></p>
-        </div>
-      </aside>
-    </div>
+function renderOverview() {
+  const internal = canOpenAdminMode();
+  const scheduled = (internal ? overviewPlanSeeds : [])
+    .map(plan => ({ plan, brand: state.brands.find(brand => brand.id === plan.brandId) }))
+    .filter(entry => entry.brand);
+  const pending = internal ? state.brands.filter(brand => !scheduled.some(entry => entry.brand.id === brand.id)) : [];
+  return `
+    <div class="page-header"><div>
+      <h1>${internal ? "Campaign timeline" : "Campaign overview"}</h1>
+      <p>${internal ? "Estimated task dates by brand. Select a task to see what its owner needs to do." : "Select a brand to view its shared campaigns and files."}</p>
+    </div></div>
+    ${scheduled.map(({ plan, brand }) => renderBrandTimeline(plan, brand)).join("")}
+    ${pending.length ? `<p class="schedule-pending"><strong>Awaiting schedule</strong> ${pending.map(brand => escapeHtml(brand.name)).join(" · ")}</p>` : ""}
 
     <div class="section-heading">
       <div>
