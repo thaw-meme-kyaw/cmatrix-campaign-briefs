@@ -21,15 +21,30 @@
           <div class="brand-mark" aria-hidden="true">CM</div>
           <div><strong>C-Matrix</strong><span>Campaign briefs</span></div>
         </div>
-        <div class="auth-icon" aria-hidden="true"><i data-lucide="lock"></i></div>
+        <div class="auth-icon" aria-hidden="true"><i data-lucide="lock-keyhole"></i></div>
         <span class="eyebrow">Internal team access</span>
-        <h1 id="auth-title">Enter the shared password</h1>
-        <p>Use the team password to open campaign briefs and approved files.</p>
-        <form class="auth-form" id="auth-form">
-          <label for="access-password">Password</label>
-          <input id="access-password" name="password" type="password" inputmode="numeric" autocomplete="current-password" required />
-          <p class="auth-error" id="auth-error" role="alert" hidden>Incorrect password. Please try again.</p>
-          <button class="button primary" type="submit"><i data-lucide="arrow-right" aria-hidden="true"></i>Open workspace</button>
+        <h1 id="auth-title">Sign in to the campaign portal</h1>
+        <p id="auth-description">Use your approved team account to open campaign briefs and files.</p>
+        <form class="auth-form" id="supabase-auth-form" hidden>
+          <label for="auth-email">Work email</label>
+          <input id="auth-email" name="email" type="email" autocomplete="username" placeholder="name@company.com" required />
+          <label for="auth-password">Password</label>
+          <div class="password-field">
+            <input id="auth-password" name="password" type="password" autocomplete="current-password" required />
+            <button class="password-toggle" id="password-toggle" type="button" aria-label="Show password" title="Show password">
+              <i data-lucide="eye" aria-hidden="true"></i>
+            </button>
+          </div>
+          <p class="auth-error" id="supabase-auth-error" role="alert" hidden></p>
+          <button class="button primary" id="supabase-login-button" type="submit"><i data-lucide="log-in" aria-hidden="true"></i>Sign in</button>
+        </form>
+        <form class="auth-form" id="password-setup-form" hidden>
+          <label for="new-password">Create password</label>
+          <input id="new-password" name="password" type="password" autocomplete="new-password" minlength="8" required />
+          <label for="confirm-password">Confirm password</label>
+          <input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required />
+          <p class="auth-error" id="password-setup-error" role="alert" hidden></p>
+          <button class="button primary" id="password-setup-button" type="submit"><i data-lucide="key-round" aria-hidden="true"></i>Save password</button>
         </form>
         <div class="auth-footnote"><i data-lucide="shield-check" aria-hidden="true"></i><span>For authorised C-Matrix team members only.</span></div>
       </div>
@@ -82,6 +97,10 @@
             <div class="mode-switch" aria-label="Workspace mode">
               <button class="mode-button active" data-mode="team">Team view</button>
               <button class="mode-button" data-mode="admin">Admin</button>
+            </div>
+            <div class="account-summary" id="account-summary" hidden>
+              <span class="account-avatar" id="account-avatar" aria-hidden="true">T</span>
+              <span class="account-copy"><strong id="account-email"></strong><small id="account-role"></small></span>
             </div>
             <button class="button secondary auth-logout" id="auth-logout">
               <i data-lucide="log-out" aria-hidden="true"></i>
@@ -284,15 +303,8 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
-    <script>
-      window.CMATRIX_CONFIG = window.CMATRIX_CONFIG || {
-        readOnly: true,
-        accessPasswordHash: "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
-        supabaseUrl: "https://stwulgvqhibhkpsovigs.supabase.co",
-        supabasePublishableKey: "sb_publishable_FGJ1A7STgFAz3zhvNUobFg_DJ46Srfx",
-      };
-    </script>
-    <script src="app.js?v=20261125-5"></script>
+    <script src="app.js?v=20261126-2"></script>
   </body>
 </html>

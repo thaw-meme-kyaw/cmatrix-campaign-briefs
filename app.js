@@ -3,11 +3,12 @@ const DB_NAME = "cmatrix-creative-library";
 const DB_VERSION = 1;
 const ASSET_STORE = "assets";
 const READ_ONLY = Boolean(window.CMATRIX_CONFIG?.readOnly);
-const ACCESS_PASSWORD_HASH = window.CMATRIX_CONFIG?.accessPasswordHash || "";
-const ACCESS_SESSION_KEY = "cmatrix-team-access-v1";
 const SUPABASE_URL = window.CMATRIX_CONFIG?.supabaseUrl?.replace(/\/$/, "") || "";
 const SUPABASE_KEY = window.CMATRIX_CONFIG?.supabasePublishableKey || "";
 const SUPABASE_ENABLED = Boolean(SUPABASE_URL && SUPABASE_KEY);
+const PRIVATE_FILE_URL_TTL = Number(window.CMATRIX_CONFIG?.privateFileUrlTtlSeconds) || 3600;
+const ALLOWED_ROLES = new Set(["admin", "editor", "viewer"]);
+const AUTH_LINK_TYPE = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("type");
 
 const brandSeed = [
   { id: "cardgoal", name: "Cardgoal", initials: "CG", tier: 1, owner: "David", color: "#c94b38" },
@@ -542,29 +543,9 @@ function createInitialState() {
 
 function loadState() {
   const fallback = createInitialState();
-  try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (!stored?.brands) return fallback;
-    const nextState = {
-      ...fallback,
-      ...stored,
-      brands: brandSeed.map((seed) => {
-        const saved = stored.brands.find((brand) => brand.id === seed.id) || {};
-        const defaults = campaignDefaultsFor(seed.id);
-        return {
-          ...saved,
-          ...seed,
-          current: mergeCampaign(defaults.current, saved.current),
-          december: mergeCampaign(defaults.december, saved.december),
-        };
-      }),
-    };
-    if (READ_ONLY) nextState.mode = "team";
-    return nextState;
-  } catch {
-    if (READ_ONLY) fallback.mode = "team";
-    return fallback;
-  }
+  fallback.brands = [];
+  fallback.activities = [];
+  return fallback;
 }
 
 let state = loadState();
@@ -573,23 +554,37 @@ let remoteAssets = [];
 let toastTimer;
 let previewUrl;
 let appInitialised = false;
+let currentProfile = null;
+let currentSession = null;
+let authListener = null;
+let supabaseClient = null;
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  // Authenticated content is persisted only in Supabase.
 }
 
-async function fetchSupabaseRows(table, query) {
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
+function getSupabaseClient() {
+  if (supabaseClient) return supabaseClient;
+  if (!SUPABASE_ENABLED) throw new Error("Supabase configuration is missing.");
+  if (!window.supabase?.createClient) throw new Error("The Supabase client could not be loaded.");
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
     },
   });
-  if (!response.ok) throw new Error(`${table} request failed with ${response.status}`);
-  return response.json();
+  return supabaseClient;
+}
+
+async function fetchSupabaseRows(table, columns, configure = (query) => query) {
+  const query = configure(getSupabaseClient().from(table).select(columns));
+  const { data, error } = await query;
+  if (error) throw new Error(`${table} request failed: ${error.message}`);
+  return data || [];
 }
 
 function campaignFromRow(row, fallback) {
@@ -622,35 +617,45 @@ function formatRemoteDate(value) {
   }).format(new Date(value));
 }
 
-function storagePublicUrl(path) {
+async function createPrivateFileUrl(path) {
   if (!path) return "";
-  if (/^https?:\/\//i.test(path)) return path;
-  return `${SUPABASE_URL}/storage/v1/object/public/campaign-files/${path.split("/").map(encodeURIComponent).join("/")}`;
+  const { data, error } = await getSupabaseClient()
+    .storage
+    .from("campaign-files")
+    .createSignedUrl(path, PRIVATE_FILE_URL_TTL);
+  if (error) throw new Error(`Could not open ${path}: ${error.message}`);
+  return data?.signedUrl || "";
 }
 
 async function loadRemoteContent() {
   if (!SUPABASE_ENABLED) return;
   const [brands, campaigns, files] = await Promise.all([
-    fetchSupabaseRows("brands", "select=id,name,initials,tier,owner_name,color,sort_order&active=eq.true&order=sort_order.asc"),
-    fetchSupabaseRows("campaigns", "select=brand_id,section,title,objective,audience,offer,key_messages,cta,content_requirements,restrictions,start_date,end_date,status,share_with_team,modules,updated_at"),
-    fetchSupabaseRows("campaign_files", "select=id,brand_id,section,title,asset_kind,platform,status,file_name,mime_type,size_bytes,storage_path,display_date,created_at&order=created_at.desc"),
+    fetchSupabaseRows(
+      "brands",
+      "id,name,initials,tier,owner_name,color,sort_order",
+      (query) => query.eq("active", true).order("sort_order", { ascending: true }),
+    ),
+    fetchSupabaseRows(
+      "campaigns",
+      "brand_id,section,title,objective,audience,offer,key_messages,cta,content_requirements,restrictions,start_date,end_date,status,share_with_team,modules,updated_at",
+    ),
+    fetchSupabaseRows(
+      "campaign_files",
+      "id,brand_id,section,title,asset_kind,platform,status,share_with_team,file_name,mime_type,size_bytes,storage_path,display_date,created_at",
+      (query) => query.order("created_at", { ascending: false }),
+    ),
   ]);
 
-  if (brands.length) {
-    state.brands = state.brands.map((brand) => {
-      const remote = brands.find((item) => item.id === brand.id);
-      return remote
-        ? {
-            ...brand,
-            name: remote.name,
-            initials: remote.initials,
-            tier: remote.tier,
-            owner: remote.owner_name,
-            color: remote.color,
-          }
-        : brand;
-    });
-  }
+  state.brands = brands.map((remote) => ({
+    id: remote.id,
+    name: remote.name,
+    initials: remote.initials,
+    tier: remote.tier,
+    owner: remote.owner_name,
+    color: remote.color,
+    current: blankCampaign("current"),
+    december: blankCampaign("december"),
+  }));
 
   campaigns.forEach((row) => {
     const brand = state.brands.find((item) => item.id === row.brand_id);
@@ -658,8 +663,8 @@ async function loadRemoteContent() {
     brand[row.section] = campaignFromRow(row, brand[row.section]);
   });
 
-  remoteAssets = files.map((file) => {
-    const url = storagePublicUrl(file.storage_path);
+  remoteAssets = await Promise.all(files.map(async (file) => {
+    const url = await createPrivateFileUrl(file.storage_path);
     return {
       id: file.id,
       brandId: file.brand_id,
@@ -677,7 +682,7 @@ async function loadRemoteContent() {
       isStatic: true,
       isRemote: true,
     };
-  });
+  }));
 }
 
 function formatDate(dateString) {
@@ -748,59 +753,228 @@ function showToast(message) {
   toastTimer = setTimeout(() => toast.classList.remove("visible"), 2600);
 }
 
-async function hashAccessPassword(value) {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+function canEditContent() {
+  if (READ_ONLY) return false;
+  return Boolean(currentProfile && ["admin", "editor"].includes(currentProfile.role));
+}
+
+function canOpenAdminMode() {
+  return Boolean(currentProfile && ["admin", "editor"].includes(currentProfile.role));
+}
+
+function isPortalReadOnly() {
+  return !canEditContent();
 }
 
 function setAccessLocked(locked) {
   document.body.classList.toggle("auth-locked", locked);
   $("#auth-gate").hidden = !locked;
-  if (locked) requestAnimationFrame(() => $("#access-password").focus());
+  if (locked) {
+    const target = $("#password-setup-form").hidden ? $("#auth-email") : $("#new-password");
+    requestAnimationFrame(() => target?.focus());
+  }
+}
+
+function renderAccountSummary() {
+  const summary = $("#account-summary");
+  if (!currentProfile) {
+    summary.hidden = true;
+    return;
+  }
+  const email = currentProfile.email || currentSession?.user?.email || "Team member";
+  $("#account-email").textContent = email;
+  $("#account-role").textContent = `${currentProfile.role.charAt(0).toUpperCase()}${currentProfile.role.slice(1)} access`;
+  $("#account-avatar").textContent = email.charAt(0).toUpperCase();
+  summary.hidden = false;
 }
 
 async function openProtectedWorkspace() {
-  sessionStorage.setItem(ACCESS_SESSION_KEY, ACCESS_PASSWORD_HASH || "unlocked");
   setAccessLocked(false);
+  renderAccountSummary();
   if (!appInitialised) {
     appInitialised = true;
     await initialise();
   }
 }
 
-function initialiseAccessGate() {
-  const form = $("#auth-form");
-  const passwordInput = $("#access-password");
-  const error = $("#auth-error");
-  const savedAccess = sessionStorage.getItem(ACCESS_SESSION_KEY);
+function setSupabaseAuthError(message) {
+  const error = $("#supabase-auth-error");
+  error.textContent = message;
+  error.hidden = !message;
+}
 
-  $("#auth-logout").addEventListener("click", () => {
-    sessionStorage.removeItem(ACCESS_SESSION_KEY);
-    window.location.reload();
+function setLoginPending(pending) {
+  const button = $("#supabase-login-button");
+  button.disabled = pending;
+  button.innerHTML = pending
+    ? '<i data-lucide="loader-circle" class="spin" aria-hidden="true"></i>Signing in'
+    : '<i data-lucide="log-in" aria-hidden="true"></i>Sign in';
+  renderIcons();
+}
+
+async function loadCurrentProfile(session) {
+  const { data, error } = await getSupabaseClient()
+    .from("user_profiles")
+    .select("id,email,role,active")
+    .eq("id", session.user.id)
+    .maybeSingle();
+  if (error) throw new Error(`Account access check failed: ${error.message}`);
+  if (!data || !data.active || !ALLOWED_ROLES.has(data.role)) {
+    const inactiveError = new Error("Your account is not approved for this portal. Please contact the campaign administrator.");
+    inactiveError.code = "ACCOUNT_INACTIVE";
+    throw inactiveError;
+  }
+  return data;
+}
+
+async function acceptSupabaseSession(session) {
+  currentSession = session;
+  try {
+    currentProfile = await loadCurrentProfile(session);
+    await openProtectedWorkspace();
+  } catch (error) {
+    currentSession = null;
+    currentProfile = null;
+    await getSupabaseClient().auth.signOut();
+    setAccessLocked(true);
+    setSupabaseAuthError(
+      error.code === "ACCOUNT_INACTIVE"
+        ? error.message
+        : "We could not verify your portal access. Please try again or contact the campaign administrator.",
+    );
+    throw error;
+  }
+}
+
+async function initialiseSupabaseGate() {
+  const form = $("#supabase-auth-form");
+  const emailInput = $("#auth-email");
+  const passwordInput = $("#auth-password");
+  form.hidden = false;
+
+  if (!SUPABASE_ENABLED || !window.supabase?.createClient) {
+    setAccessLocked(true);
+    setSupabaseAuthError("Portal sign-in is not configured. Please contact the campaign administrator.");
+    form.querySelectorAll("input, button").forEach((control) => { control.disabled = true; });
+    return;
+  }
+
+  $("#password-toggle").addEventListener("click", () => {
+    const showing = passwordInput.type === "text";
+    passwordInput.type = showing ? "password" : "text";
+    $("#password-toggle").setAttribute("aria-label", showing ? "Show password" : "Hide password");
+    $("#password-toggle").setAttribute("title", showing ? "Show password" : "Hide password");
+    $("#password-toggle").innerHTML = `<i data-lucide="${showing ? "eye" : "eye-off"}" aria-hidden="true"></i>`;
+    renderIcons();
   });
 
-  passwordInput.addEventListener("input", () => {
-    error.hidden = true;
-    passwordInput.removeAttribute("aria-invalid");
-  });
+  [emailInput, passwordInput].forEach((input) => input.addEventListener("input", () => {
+    setSupabaseAuthError("");
+    input.removeAttribute("aria-invalid");
+  }));
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const submittedHash = await hashAccessPassword(passwordInput.value);
-    if (submittedHash !== ACCESS_PASSWORD_HASH) {
-      error.hidden = false;
+    setSupabaseAuthError("");
+    setLoginPending(true);
+    const { data, error } = await getSupabaseClient().auth.signInWithPassword({
+      email: emailInput.value.trim(),
+      password: passwordInput.value,
+    });
+    if (error || !data.session) {
+      setLoginPending(false);
+      emailInput.setAttribute("aria-invalid", "true");
       passwordInput.setAttribute("aria-invalid", "true");
+      setSupabaseAuthError("The email or password is incorrect, or this account has not been activated.");
       passwordInput.select();
       return;
     }
-    passwordInput.value = "";
-    await openProtectedWorkspace();
+    try {
+      await acceptSupabaseSession(data.session);
+      passwordInput.value = "";
+    } catch (sessionError) {
+      console.warn("Portal access was denied.", sessionError);
+    } finally {
+      setLoginPending(false);
+    }
+  });
+
+  const client = getSupabaseClient();
+  const setupForm = $("#password-setup-form");
+  const setupError = $("#password-setup-error");
+
+  const showPasswordSetup = async (session) => {
+    currentSession = session;
+    currentProfile = await loadCurrentProfile(session);
+    form.hidden = true;
+    setupForm.hidden = false;
+    $("#auth-title").textContent = "Create your portal password";
+    $("#auth-description").textContent = "Choose a password with at least 8 characters to finish activating your account.";
+    setAccessLocked(true);
+    renderIcons();
+  };
+
+  setupForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const password = $("#new-password").value;
+    const confirmation = $("#confirm-password").value;
+    setupError.hidden = true;
+    if (password.length < 8 || password !== confirmation) {
+      setupError.textContent = password.length < 8 ? "Use at least 8 characters." : "The passwords do not match.";
+      setupError.hidden = false;
+      return;
+    }
+    const button = $("#password-setup-button");
+    button.disabled = true;
+    const { error: updateError } = await client.auth.updateUser({ password });
+    if (updateError) {
+      setupError.textContent = updateError.message || "The password could not be saved. Please request a new recovery email.";
+      setupError.hidden = false;
+      button.disabled = false;
+      return;
+    }
+    window.history.replaceState({}, document.title, window.location.pathname);
+    setupForm.hidden = true;
+    form.hidden = false;
+    button.disabled = false;
+    await acceptSupabaseSession(currentSession);
+  });
+
+  let passwordSetupRequested = ["invite", "recovery"].includes(AUTH_LINK_TYPE);
+  const { data: listener } = client.auth.onAuthStateChange((event, session) => {
+    if (event === "PASSWORD_RECOVERY" && session) {
+      passwordSetupRequested = true;
+      showPasswordSetup(session).catch((error) => setSupabaseAuthError(error.message));
+    }
+    if (event === "SIGNED_OUT" && !document.body.classList.contains("auth-locked")) window.location.reload();
+  });
+  authListener = listener.subscription;
+
+  const { data, error } = await client.auth.getSession();
+  if (error) {
+    setSupabaseAuthError("Your saved session could not be restored. Please sign in again.");
+    setAccessLocked(true);
+  } else if (data.session) {
+    try {
+      if (passwordSetupRequested) await showPasswordSetup(data.session);
+      else await acceptSupabaseSession(data.session);
+    } catch (sessionError) {
+      console.warn("Saved portal access was denied.", sessionError);
+    }
+  } else {
+    setAccessLocked(true);
+  }
+
+}
+
+async function initialiseAccessGate() {
+  $("#auth-logout").addEventListener("click", async () => {
+    if (supabaseClient) await supabaseClient.auth.signOut();
+    window.location.reload();
   });
 
   renderIcons();
-  if (!ACCESS_PASSWORD_HASH || savedAccess === ACCESS_PASSWORD_HASH) openProtectedWorkspace();
-  else setAccessLocked(true);
+  await initialiseSupabaseGate();
 }
 
 function openDatabase() {
@@ -873,7 +1047,7 @@ function renderOverview() {
   const campaigns = state.brands.flatMap((brand) => [brand.current, brand.december]);
   const published = campaigns.filter((campaign) => campaign.status === "Published").length;
   const underReview = campaigns.filter((campaign) => campaign.status === "Under Review").length;
-  const overviewPlans = overviewPlanSeeds
+  const overviewPlans = (canOpenAdminMode() ? overviewPlanSeeds : [])
     .map((plan) => ({ ...plan, brand: state.brands.find((brand) => brand.id === plan.brandId) }))
     .filter((plan) => plan.brand);
   const groupedTasks = overviewPlans
@@ -1039,7 +1213,7 @@ function renderBrandPage(brand) {
     (asset) => isBriefFileAsset(asset) && (state.mode === "admin" || ["Approved", "Published"].includes(asset.status)),
   );
   const creativeAssets = activeAssets.filter((asset) => !isBriefFileAsset(asset));
-  const visibleCampaign = state.mode === "admin" || campaign.status === "Published" || campaign.shareVisible;
+  const visibleCampaign = state.mode === "admin" || ["Approved", "Published"].includes(campaign.status) || campaign.shareVisible;
   const isBriefTab = state.activeTab === "briefs";
   const headerStatus = isBriefTab ? `${briefAssets.length} PDF${briefAssets.length === 1 ? "" : "s"}` : campaign.status;
   const headerUpdated = isBriefTab ? briefAssets[0]?.dateLabel || "No PDF uploaded" : campaign.lastUpdated;
@@ -1089,8 +1263,8 @@ function renderUnpublishedCampaign(brand) {
       <div>
         <i data-lucide="file-clock" aria-hidden="true"></i>
         <h3>This brief is not published yet</h3>
-        <p>Switch to Admin mode to add the campaign information and publish it for the team.</p>
-        <button class="button secondary" data-switch-admin="${brand.id}">Open Admin mode</button>
+        <p>${canOpenAdminMode() ? "Open Admin mode to review the draft campaign information." : "This campaign has not been approved for team access yet."}</p>
+        ${canOpenAdminMode() ? `<button class="button secondary" data-switch-admin="${brand.id}">Open Admin mode</button>` : ""}
       </div>
     </div>
   `;
@@ -1173,7 +1347,7 @@ function renderCampaignFiles(brandId, section) {
       asset.brandId === brandId &&
       asset.section === section &&
       !isBriefFileAsset(asset) &&
-      (state.mode === "admin" || asset.status === "Published"),
+      (state.mode === "admin" || ["Approved", "Published"].includes(asset.status)),
   );
   return `
     <section class="campaign-files">
@@ -1388,7 +1562,7 @@ function renderInlineCampaignMedia(media, className) {
 }
 
 function renderCreativeLibrary(assets, brandId = null) {
-  const visibleAssets = assets.filter((asset) => state.mode === "admin" || asset.status === "Published");
+  const visibleAssets = assets.filter((asset) => state.mode === "admin" || ["Approved", "Published"].includes(asset.status));
   const filtered = visibleAssets.filter((asset) => state.creativeFilter === "all" || asset.section === state.creativeFilter);
   return `
     <div class="creative-toolbar">
@@ -1502,8 +1676,13 @@ function render() {
 
   if (state.route === "brand") {
     const brand = state.brands.find((item) => item.id === state.activeBrandId) || state.brands[0];
-    html = renderBrandPage(brand);
-    breadcrumb = `${brand.name} / ${state.activeTab === "current" ? "Current promotion" : state.activeTab === "december" ? "December campaign" : state.activeTab === "briefs" ? "Brief files" : "Creatives"}`;
+    if (brand) {
+      html = renderBrandPage(brand);
+      breadcrumb = `${brand.name} / ${state.activeTab === "current" ? "Current promotion" : state.activeTab === "december" ? "December campaign" : state.activeTab === "briefs" ? "Brief files" : "Creatives"}`;
+    } else {
+      state.route = "overview";
+      html = renderOverview();
+    }
   } else if (state.route === "process") {
     html = renderProcess();
     breadcrumb = "Content process";
@@ -1515,11 +1694,13 @@ function render() {
   }
 
   content.innerHTML = html;
-  document.body.classList.toggle("read-only", READ_ONLY);
+  const portalReadOnly = isPortalReadOnly();
+  document.body.classList.toggle("read-only", portalReadOnly);
   $("#breadcrumb").textContent = breadcrumb;
-  $("#prototype-notice").classList.toggle("hidden", state.noticeDismissed || READ_ONLY);
+  $("#prototype-notice").classList.toggle("hidden", state.noticeDismissed || portalReadOnly);
+  $(".mode-switch").classList.toggle("hidden", !canOpenAdminMode());
   $$(".mode-button").forEach((button) => button.classList.toggle("active", button.dataset.mode === state.mode));
-  $("#top-add-button").classList.toggle("hidden", state.mode !== "admin");
+  $("#top-add-button").classList.toggle("hidden", state.mode !== "admin" || !canEditContent());
   $$(".nav-item").forEach((button) => {
     const isBrand = button.dataset.route === "brand" && button.dataset.brandId === state.activeBrandId;
     const isRoute = button.dataset.route === state.route && state.route !== "brand";
@@ -1530,7 +1711,7 @@ function render() {
 }
 
 function setMode(mode) {
-  if (READ_ONLY) return;
+  if (mode === "admin" && !canOpenAdminMode()) return;
   state.mode = mode;
   saveState();
   render();
@@ -1741,12 +1922,7 @@ function addActivity(text, type) {
 
 async function refreshAssets() {
   assetCache.forEach((asset) => !asset.isStatic && asset.objectUrl && URL.revokeObjectURL(asset.objectUrl));
-  const storedAssets = await getAssets();
-  assetCache = [
-    ...staticAssetSeeds.map((asset) => ({ ...asset, objectUrl: asset.url })),
-    ...remoteAssets,
-    ...storedAssets.map((asset) => ({ ...asset, objectUrl: URL.createObjectURL(asset.blob) })),
-  ];
+  assetCache = [...remoteAssets];
   render();
 }
 
@@ -1795,12 +1971,22 @@ async function deleteAsset(id) {
 }
 
 async function initialise() {
-  if (SUPABASE_ENABLED) {
-    try {
-      await loadRemoteContent();
-    } catch (error) {
-      console.warn("Supabase content is unavailable; using the bundled campaign data.", error);
-    }
+  try {
+    await loadRemoteContent();
+  } catch (error) {
+    console.error("Authenticated campaign content is unavailable.", error);
+    renderBrandNavigation();
+    populateBrandSelectors();
+    bindStaticEvents();
+    $("#app-content").innerHTML = `
+      <div class="secure-load-error">
+        <i data-lucide="cloud-off" aria-hidden="true"></i>
+        <h1>Campaign content is unavailable</h1>
+        <p>The secure content service could not be reached. No bundled campaign data has been shown.</p>
+        <button class="button secondary" type="button" onclick="window.location.reload()"><i data-lucide="refresh-cw" aria-hidden="true"></i>Try again</button>
+      </div>`;
+    renderIcons();
+    return;
   }
   renderBrandNavigation();
   populateBrandSelectors();

@@ -132,6 +132,10 @@ body.auth-locked {
   margin-top: 24px;
 }
 
+.auth-form[hidden] {
+  display: none;
+}
+
 .auth-form label {
   color: #4f554e;
   font-size: 11px;
@@ -149,6 +153,39 @@ body.auth-locked {
   font-size: 16px;
 }
 
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  padding-right: 46px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  color: var(--text);
+  background: var(--surface-alt);
+}
+
+.password-toggle svg {
+  width: 17px;
+  height: 17px;
+}
+
 .auth-form input[aria-invalid="true"] {
   border-color: #bd4d41;
   background: #fff7f5;
@@ -157,6 +194,21 @@ body.auth-locked {
 .auth-form .button {
   width: 100%;
   margin-top: 4px;
+}
+
+.auth-form .button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.spin {
+  animation: spin 850ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .auth-error {
@@ -368,6 +420,85 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.account-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 10px;
+  border-right: 1px solid var(--border);
+}
+
+.account-summary[hidden] {
+  display: none;
+}
+
+.account-avatar {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #333a33;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.account-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.account-copy strong,
+.account-copy small {
+  overflow: hidden;
+  max-width: 180px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-copy strong {
+  font-size: 11px;
+}
+
+.account-copy small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.secure-load-error {
+  display: grid;
+  min-height: 58vh;
+  place-items: center;
+  align-content: center;
+  text-align: center;
+}
+
+.secure-load-error > svg {
+  width: 34px;
+  height: 34px;
+  margin-bottom: 14px;
+  color: var(--accent);
+}
+
+.secure-load-error h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 34px;
+}
+
+.secure-load-error p {
+  max-width: 500px;
+  margin: 8px 0 20px;
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .mobile-brand {
@@ -2281,7 +2412,6 @@ textarea:focus-visible {
   display: none !important;
 }
 
-.read-only .mode-switch,
 .read-only .admin-only {
   display: none !important;
 }
@@ -2417,6 +2547,14 @@ textarea:focus-visible {
 
   .topbar-actions {
     margin-left: auto;
+  }
+
+  .account-copy {
+    display: none;
+  }
+
+  .account-summary {
+    padding-right: 8px;
   }
 
   .prototype-notice {
