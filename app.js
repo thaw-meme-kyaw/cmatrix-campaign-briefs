@@ -637,7 +637,7 @@ async function loadRemoteContent() {
     ),
     fetchSupabaseRows(
       "campaigns",
-      "brand_id,section,title,objective,audience,offer,key_messages,cta,content_requirements,restrictions,start_date,end_date,status,share_with_team,modules,updated_at",
+      "id,brand_id,section,title,objective,audience,offer,key_messages,cta,content_requirements,restrictions,start_date,end_date,status,share_with_team,modules,updated_at",
     ),
     fetchSupabaseRows(
       "campaign_files",
@@ -662,6 +662,15 @@ async function loadRemoteContent() {
     if (!brand || !["current", "december"].includes(row.section)) return;
     brand[row.section] = campaignFromRow(row, brand[row.section]);
   });
+
+  const cardgoalDecember = campaigns.find(row => row.brand_id === "cardgoal" && row.section === "december");
+  const cardgoal = state.brands.find(brand => brand.id === "cardgoal");
+  if (canOpenAdminMode() && cardgoal && cardgoalDecember) {
+    const [schedule] = await fetchSupabaseRows(
+      "campaign_private_notes", "overview_timelines", query => query.eq("campaign_id", cardgoalDecember.id),
+    );
+    cardgoal.overviewTimelines = schedule?.overview_timelines || [];
+  }
 
   remoteAssets = await Promise.all(files.map(async (file) => {
     const url = await createPrivateFileUrl(file.storage_path);
@@ -1070,7 +1079,7 @@ function renderOverview() {
     .filter(entry => entry.brand);
   if (internal) {
     const brand = state.brands.find(item => item.id === "cardgoal");
-    const timelines = brand?.december?.modules?.filter(item => item.type === "overviewTimeline") || [];
+    const timelines = brand?.overviewTimelines || [];
     for (const plan of timelines) {
       if (Array.isArray(plan.tasks)) scheduled.push({ plan, brand });
     }
